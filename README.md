@@ -147,4 +147,9 @@ rosservice call /minihawk_SIM/mavros/set_mode "custom_mode: 'QHOVER'"
 # https://ardupilot.org/plane/docs/qland-mode.html
 [Invoke ROS service in terminal 2]:
 rosservice call /minihawk_SIM/mavros/set_mode "custom_mode: 'QLAND'"
+
+#EDIT 1
 ```
+
+
+

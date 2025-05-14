@@ -10,33 +10,25 @@ class TagFollowLanding:
     def __init__(self):
         rospy.init_node('tag_follow_landing')
 
-        # Publishers/Subscribers
+        #Publishers/Subscribers
         self.cmd_pub = rospy.Publisher(
             '/minihawk_SIM/mavros/setpoint_velocity/cmd_vel',
             TwistStamped, queue_size=10)
-        rospy.Subscriber(
-            '/minihawk_SIM/MH_usb_camera_link_optical/tag_detections',
-            AprilTagDetectionArray, self.tag_callback)
+        rospy.Subscriber('/minihawk_SIM/MH_usb_camera_link_optical/tag_detections', AprilTagDetectionArray, self.tag_callback)
 
-        # Service proxies
+
+        #Services
         rospy.wait_for_service('/minihawk_SIM/mavros/set_mode')
         rospy.wait_for_service('/minihawk_SIM/mavros/cmd/arming')
         self.set_mode_srv = rospy.ServiceProxy('/minihawk_SIM/mavros/set_mode', SetMode)
         self.arm_srv = rospy.ServiceProxy('/minihawk_SIM/mavros/cmd/arming', CommandBool)
 
-        # State variables
+        #State variables
         self.tag_seen = False
         self.last_seen_time = time.time()
         self.qloiter_engaged = False
         self.landed = False
-        self.centered_start_time = None
-
-        # PID gains
-        self.Kp_x = 0.5
-        self.Kp_y = 0.5
-        self.Kp_z = 0.4
-        self.descent_bias = 0.1  # gentle descent
-
+	self.first_tag_time = None
     def set_mode(self, mode):
         try:
             response = self.set_mode_srv(0, mode)
@@ -55,61 +47,47 @@ class TagFollowLanding:
             rospy.logerr("Arming failed: {}".format(e))
 
     def tag_callback(self, msg):
-        rospy.loginfo_throttle(2, "tag_callback triggered. Detections: {}".format(len(msg.detections)))
-
         if len(msg.detections) > 0:
             pose = msg.detections[0].pose.pose.pose.position
-            rospy.loginfo("Pose values: x={:.2f}, y={:.2f}, z={:.2f}".format(pose.x, pose.y, pose.z))
-
             self.tag_seen = True
-            self.last_seen_time = time.time()
+	    if self.first_tag_time is None:
+                self.first_tag_time = time.time()
+                rospy.loginfo("First tag seen. Waiting before QLOITER...")
 
-            # Check if centered in X and Y
-            centered = abs(pose.x) < 0.1 and abs(pose.y) > -3.1
-            if centered:
-                if self.centered_start_time is None:
-                    self.centered_start_time = time.time()
-                elif time.time() - self.centered_start_time > 1.0 and not self.qloiter_engaged:
-                    rospy.loginfo("Centered and stable. Switching to QLOITER.")
-                    self.set_mode('QLOITER')
-                    self.qloiter_engaged = True
-            else:
-                self.centered_start_time = None
 
-            # Tag control once in QLOITER
-            if self.qloiter_engaged and not self.landed:
-                cmd = TwistStamped()
-                cmd.header.stamp = rospy.Time.now()
-                cmd.twist.linear.x = -self.Kp_x * pose.x
-                cmd.twist.linear.y = -self.Kp_y * pose.y
-                cmd.twist.linear.z = -self.Kp_z * pose.z - self.descent_bias
+            #QLOITER switch
+            if not self.qloiter_engaged and (time.time() - self.first_tag_time) > 5.0:
+                self.set_mode('QLOITER')
+                self.qloiter_engaged = True
 
-                self.cmd_pub.publish(cmd)
+            #PID-style control
+            cmd = TwistStamped()
+            cmd.header.stamp = rospy.Time.now()
+            cmd.twist.linear.x = -0.3 * pose.x
+            cmd.twist.linear.y = -0.3 * pose.y
+            cmd.twist.linear.z = -0.3 * pose.z - 0.2  #bias to descend
 
-                rospy.loginfo("Velocity: x={:.2f}, y={:.2f}, z={:.2f}".format(
-                    cmd.twist.linear.x, cmd.twist.linear.y, cmd.twist.linear.z))
+            self.cmd_pub.publish(cmd)
 
-                # Landing trigger (if centered and below 1m)
-                if abs(pose.x) < 0.1 and abs(pose.y) < 0.1 and pose.z < 1.0:
-                    rospy.loginfo("Centered and low. Switching to QLAND.")
-                    self.set_mode('QLAND')
-                    self.landed = True
+            rospy.loginfo("Tag Detected")
+	    self.last_seen_time = time.time()
 
         else:
+	    rospy.loginfo("No tags detected.")
             self.tag_seen = False
-            self.centered_start_time = None
-            rospy.loginfo_throttle(5, "No tags detected.")
 
     def run(self):
+        #Start in auto mode and arm
         self.set_mode('AUTO')
         self.arm()
 
-        rate = rospy.Rate(10)
+        rate = rospy.Rate(5)
         while not rospy.is_shutdown():
+            #If tag was seen but lost, initiate landing
             if self.qloiter_engaged and not self.tag_seen:
                 time_since_seen = time.time() - self.last_seen_time
                 if time_since_seen > 3 and not self.landed:
-                    rospy.loginfo("Tag lost for {:.1f} sec, switching to QLAND".format(time_since_seen))
+                    rospy.loginfo("Tag lost, switching to QLAND")
                     self.set_mode('QLAND')
                     self.landed = True
             rate.sleep()

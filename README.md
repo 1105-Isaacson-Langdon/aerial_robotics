@@ -154,21 +154,22 @@ rosservice call /minihawk_SIM/mavros/set_mode "custom_mode: 'QLAND'"
 ## Steps
 ```
 1. Source workspace
-   source ~/aerial_robotics_ws/devel/setup.bash
+source ~/aerial_robotics_ws/devel/setup.bash
    
 2. Launch Gazebo
-   roslaunch robowork_minihawk_gazebo minihawk_playpen.launch
+roslaunch robowork_minihawk_gazebo minihawk_playpen.launch
 
 3. Start ArduPilot SITL (new terminal)
-   ./Tools/autotest/sim_vehicle.py -v ArduPlane -f gazebo-minihawk --model gazebo-quadplane-tilttri --console
+./Tools/autotest/sim_vehicle.py -v ArduPlane -f gazebo-minihawk --model gazebo-quadplane-tilttri --console
 
 4. Launch ROS node to communicate (new terminal)
-   ROS_NAMESPACE="minihawk_SIM" roslaunch robowork_minihawk_launch vehicle1_apm_SIM.launch
+ROS_NAMESPACE="minihawk_SIM" roslaunch robowork_minihawk_launch vehicle1_apm_SIM.launch
 
 5. Run python script in ROS
-   rosrun robowork_minihawk_launch script.py
-   
-   #robot should fly 10 meters in air
+cd $HOME/aerial_robotics_ws/src/aerial_robotics/robowork_minihawk_launch/scripts
+rosrun robowork_minihawk_launch tag_follow_landing.py
+
+*Aircraft will now follow AUTO waypoints until it detects a tag, switch into QLOITER when it does and lower until tag is no longer detected, then enter QLAND mode (Finished).*
 ```
    
 

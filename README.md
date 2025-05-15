@@ -166,7 +166,6 @@ roslaunch robowork_minihawk_gazebo minihawk_playpen.launch
 ROS_NAMESPACE="minihawk_SIM" roslaunch robowork_minihawk_launch vehicle1_apm_SIM.launch
 
 5. Run python script in ROS
-cd $HOME/aerial_robotics_ws/src/aerial_robotics/robowork_minihawk_launch/scripts
 rosrun robowork_minihawk_launch tag_follow_landing.py
 
 *Aircraft will now follow AUTO waypoints until it detects a tag, switch into QLOITER when it does and lower until tag is no longer detected, then enter QLAND mode (Finished).*
